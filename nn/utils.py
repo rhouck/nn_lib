@@ -78,13 +78,17 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 
                 stats.append((epoch, loss, acc, ))
                 print('epoch {0}\tloss: {1:0.5f}\tacc: {2}'.format(*stats[-1]))
-  
                 
+                grad = mod.calc_grad(X, y, pred)
+                grad = merge_with(sum, grad, mod.calc_dreg_loss())
+                f = lambda x: "%.2e" % abs(x).mean()
+                grad_scale = valmap(f, grad)
+                print('mean abs grad:' + str(grad_scale))
+
                 if check and epoch <= (nepochs * .2):
-                    grad = mod.calc_grad(X, y, pred)
-                    grad = merge_with(sum, grad, mod.calc_dreg_loss())
                     est_grad = mod.est_grad(X, y)
-                    print check_grads(grad, est_grad)
+                    grad_acc = check_grads(grad, est_grad)
+                    print('grad accuracy:' + str(grad_acc))
                   
     except KeyboardInterrupt as err:
         print('stopping optimzation')
