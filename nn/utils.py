@@ -3,7 +3,7 @@ from operator import add
 
 import numpy as np
 from toolz import first, second, accumulate
-from toolz.dicttoolz import merge_with, valmap
+from toolz.dicttoolz import merge, merge_with, valmap
 
 
 def accuracy(y, pred):
@@ -66,7 +66,6 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 X, y = split_Xy(Xy)
                 _ = mod.step(X, y)
             
-            # check performance
             if epoch and not epoch % int((nepochs * .05)):
                                 
                 Xy = data_gen.next()
@@ -76,14 +75,15 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 loss += mod.calc_reg_loss()
                 acc = get_acc(y, pred)
                 
-                stats.append((epoch, loss, acc, ))
-                print('epoch {0}\tloss: {1:0.5f}\tacc: {2}'.format(*stats[-1]))
-                
                 grad = mod.calc_grad(X, y, pred)
                 grad = merge_with(sum, grad, mod.calc_dreg_loss())
-                f = lambda x: "%.2e" % abs(x).mean()
+                f = lambda x: abs(x).mean()
                 grad_scale = valmap(f, grad)
-                print('mean abs grad:' + str(grad_scale))
+
+                print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
+                f = lambda x: '{0}: {1:.1e}'.format(*x)
+                print('\t\t' + ' '.join(map(f, grad_scale.items())))
+                stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
 
                 if check and epoch <= (nepochs * .2):
                     est_grad = mod.est_grad(X, y)
