@@ -5,7 +5,7 @@ def relu(x, deriv=False):
     if deriv:
         f = np.vectorize(lambda x: 0. if x <= 0. else 1.)
         return f(x)
-    return np.maximum(0, x)
+    return np.maximum(0., x)
 
 def sigmoid(x, deriv=False):
     if deriv:
