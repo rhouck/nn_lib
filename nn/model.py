@@ -3,22 +3,23 @@ import operator as op
 from functools import partial
 
 import numpy as np
+from toolz import compose
 from toolz.dicttoolz import merge_with, valmap
 
 
 class adagrad_lr(object):
-    def __init__(self, lr):
-        self.lr = lr
-        self.ss_grad = None       
+    def __init__(self, lr, max_adjusted_lr=10):
+        self.lr = lr    
+        self.max_adjusted_lr = max_adjusted_lr   
         f = lambda x: self.lr / math.sqrt(x + 1e-8)
         self.f = np.vectorize(f)
         
     def update(self, grad):
-        if not isinstance(self.ss_grad, dict):
+        if not hasattr(self, 'ss_grad'):
             self.ss_grad = valmap(np.zeros_like, grad)
-        
         self.ss_grad = merge_with(sum, self.ss_grad, valmap(np.square, grad))
-        return valmap(self.f, self.ss_grad)
+        f = compose(lambda x: np.minimum(x, self.max_adjusted_lr), self.f)
+        return valmap(f, self.ss_grad)
 
 class LinearModel(object):
     """general model building class
@@ -200,6 +201,8 @@ class RNN(FeedFwd):
         dw_hb = np.sum(d_l1, axis=0, keepdims=True)
         
         self.dh = np.dot(d_l1, self.W['hh'].T)
+
+        #d_l0 = np.dot(d_l1, self.W['xh'].T)
         
         return {'xh': dw_xh, 'hh': dw_hh, 'bh': dw_hb, 'hy': dw_hy, 'by': dw_yb}
     
