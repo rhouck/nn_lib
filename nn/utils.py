@@ -14,8 +14,8 @@ def accuracy(y, pred):
     correct = f(np.argmax(pred, axis=1) - y)
     return sum(correct) / float(len(correct))
 
-def check_grads(grad, est_grad):  
-    f = np.vectorize(lambda x: 1 if x < 1e-2 else 0)   
+def check_grads(grad, est_grad, rel_error_thresh=1e-2):  
+    f = np.vectorize(lambda x: 1 if x < rel_error_thresh else 0)   
     checks = {}
     for key in grad.keys():
         abs_diff = abs(grad[key] - est_grad[key])
@@ -75,20 +75,22 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 loss += mod.calc_reg_loss()
                 acc = get_acc(y, pred)
                 
-                grad = mod.calc_grad(X, y, pred)
-                grad = merge_with(sum, grad, mod.calc_dreg_loss())
-                f = lambda x: abs(x).mean()
-                grad_scale = valmap(f, grad)
-
                 print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
-                f = lambda x: '{0}: {1:.1e}'.format(*x)
-                print('\t\t' + ' '.join(map(f, grad_scale.items())))
-                stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
 
-                if check and epoch <= (nepochs * .2):
-                    est_grad = mod.est_grad(X, y)
-                    grad_acc = check_grads(grad, est_grad)
-                    print('grad accuracy:' + str(grad_acc))
+                # grad = mod.calc_grad(X, y, pred)
+                # grad = merge_with(sum, grad, mod.calc_dreg_loss())
+                # f = lambda x: abs(x).mean()
+                # grad_scale = valmap(f, grad)
+
+                # print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
+                # f = lambda x: '{0}: {1:.1e}'.format(*x)
+                # print('\t\t' + ' '.join(map(f, grad_scale.items())))
+                # stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
+
+                # if check and epoch <= (nepochs * .2):
+                #     est_grad = mod.est_grad(X, y)
+                #     grad_acc = check_grads(grad, est_grad)
+                #     print('grad accuracy:' + str(grad_acc))
                   
     except KeyboardInterrupt as err:
         print('stopping optimzation')
