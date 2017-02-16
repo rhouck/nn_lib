@@ -72,7 +72,6 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 X, y = split_Xy(Xy)
                 pred = mod.predict(X)
                 loss = mod.calc_loss(y, pred)
-                loss += mod.calc_reg_loss()
                 acc = get_acc(y, pred)
                 
                 print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))

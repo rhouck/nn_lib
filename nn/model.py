@@ -45,28 +45,8 @@ class LinearModel(object):
             return self.W[key]
         else:
             return kwargs[key]
-        
-    def est_grad(self, X, y):
-        def ind_W(W_key):
-            W = self.W[W_key]
-            ep = 1e-5
-            grads = []
-            for i in np.ndenumerate(W):
-                losses = []
-                for k in (op.add, op.sub):
-                    if hasattr(self, 'reset'): self.reset()
-                    W_mod = np.array(W, copy=True)
-                    W_mod[i[0]] = k(i[1], ep)
-                    pred = self.predict(X, **{W_key: W_mod})
-                    loss = self.calc_loss(y, pred)
-                    loss += self.calc_reg_loss(**{W_key: W_mod})
-                    losses.append(loss)
-                grad = np.subtract(*losses) / (2 * ep) 
-                grads.append(grad)
-            return np.array(grads).reshape(*W.shape)
-        return {key: ind_W(key) for key in self.W.keys()}
     
-    def calc_reg_loss(self, **kwargs):
+    def _calc_reg_loss(self, **kwargs):
         if not self.reg:
             return 0
         
@@ -76,7 +56,12 @@ class LinearModel(object):
         for key in self.W.keys():
             if 'b' not in key:
                 loss += np.sum(np.square(w(key))) * .5
-        return loss * self.reg   
+        return loss * self.reg 
+
+    def calc_loss(self, y, pred, **kwargs):
+        loss = self.fl_act.loss(y, pred)
+        loss += self._calc_reg_loss(**kwargs)
+        return loss  
     
     def calc_dreg_loss(self):
         dW = {}
@@ -98,14 +83,11 @@ class LinearModel(object):
 
         self.layers = [X, l1,]
         return l1
-
-    def calc_loss(self, y, pred):
-        return self.fl_act.loss(y, pred)
         
     def calc_dpred(self, y, pred):
         return self.fl_act.dloss(y, pred)
 
-    def calc_grad(self, dpred):
+    def _calc_W_grad(self, dpred):
         try:
             dpred *= self.fl_act(self.layers[1], deriv=True)
         except:
@@ -116,6 +98,31 @@ class LinearModel(object):
         
         self.dX = np.dot(dpred, self.W['xy'].T)
         return {'xy': dW_xy, 'b': dW_b}
+
+    def calc_grad(self, dpred):
+        grad = self._calc_W_grad(dpred)
+        grad = merge_with(sum, grad, self.calc_dreg_loss())
+        return valmap(lambda x: x.clip(-5., 5.), grad)
+
+    def est_grad(self, X, y):
+        def ind_W(W_key):
+            W = self.W[W_key]
+            ep = 1e-5
+            grads = []
+            for i in np.ndenumerate(W):
+                losses = []
+                for k in (op.add, op.sub):
+                    if hasattr(self, 'reset'): self.reset()
+                    W_mod = np.array(W, copy=True)
+                    W_mod[i[0]] = k(i[1], ep)
+                    pred = self.predict(X, **{W_key: W_mod})
+                    loss = self.calc_loss(y, pred, **{W_key: W_mod})
+                    #loss += self.calc_reg_loss(**{W_key: W_mod})
+                    losses.append(loss)
+                grad = np.subtract(*losses) / (2 * ep) 
+                grads.append(grad)
+            return np.array(grads).reshape(*W.shape)
+        return {key: ind_W(key) for key in self.W.keys()}
 
     def update(self, grad):
         if not isinstance(self.lr, float):
@@ -128,17 +135,12 @@ class LinearModel(object):
     
     def step(self, X, y):
         pred = self.predict(X)
-        
         loss = self.calc_loss(y, pred)
-        loss += self.calc_reg_loss()
-        
         dpred = self.calc_dpred(y, pred)
         grad = self.calc_grad(dpred)
-        grad = merge_with(sum, grad, self.calc_dreg_loss())
-        grad = valmap(lambda x: x.clip(-5., 5.), grad)
         self.update(grad)
-
         return loss
+
 
 class FeedFwd(LinearModel):
     
@@ -165,7 +167,7 @@ class FeedFwd(LinearModel):
         self.layers = [X, l1, l2]
         return l2
         
-    def calc_grad(self, dpred):
+    def _calc_W_grad(self, dpred):
         try:
             dpred *= self.fl_act(self.layers[2], deriv=True)
         except:
@@ -220,11 +222,13 @@ class RNN(FeedFwd):
     def predict(self, Xs, **kwargs):
         return map(lambda x: self._predict(x, **kwargs), Xs)
     
-    def calc_loss(self, ys, preds):
+    def calc_loss(self, ys, preds, **kwargs):
         losses = map(lambda x: self.fl_act.loss(*x), zip(ys, preds))
-        return sum(losses) / len(losses)
+        loss = sum(losses) / len(losses)
+        loss += self._calc_reg_loss(**kwargs)
+        return loss
     
-    def _calc_grad(self, dpred, i):
+    def _calc_ind_W_grad(self, dpred, i):
         i += 1
         try:
             dpred *= self.fl_act(self.layers[i][2], deriv=True)
@@ -251,9 +255,9 @@ class RNN(FeedFwd):
     def calc_dpred(self, ys, preds):
         return map(lambda x: self.fl_act.dloss(*x), zip(ys, preds))
 
-    def calc_grad(self, dpreds):
+    def _calc_W_grad(self, dpreds):
         inds = reversed(range(len(dpreds)))
-        grads = map(lambda ind: self._calc_grad(dpreds[ind], ind), inds)
+        grads = map(lambda ind: self._calc_ind_W_grad(dpreds[ind], ind), inds)
         grads_sum = reduce(partial(merge_with, sum), grads)
         return valmap(lambda x: x / len(dpreds), grads_sum)
         
@@ -273,12 +277,12 @@ class StackedModels(object):
         calc_pred = lambda f: f(lambda x, m: m.predict(x), self.mods, X)
         return calc_pred(accumulate) if layers else calc_pred(reduce)
     
-    def calc_loss(self, y, pred):
-        return self.mods[-1].calc_loss(y, pred)
-        
-    def calc_reg_loss(self):
-        return sum(map(lambda x: x.calc_reg_loss(), self.mods))
+    def _calc_reg_loss(self):
+        return sum(map(lambda x: x._calc_reg_loss(), self.mods))
 
+    def calc_loss(self, y, pred):
+        return self.mods[-1].calc_loss(y, pred) + self._calc_reg_loss()
+        
     def calc_dpred(self, y, pred):
         return self.mods[-1].calc_dpred(y, pred)
 
@@ -302,7 +306,6 @@ class StackedModels(object):
                 X_mod[i[0]] = k(i[1], ep)
                 pred = self.predict(X_mod)
                 loss = self.calc_loss(y, pred)
-                loss += self.calc_reg_loss()
                 losses.append(loss)
             grad = np.subtract(*losses) / (2 * ep) 
             grads.append(grad)
@@ -312,7 +315,6 @@ class StackedModels(object):
     def step(self, X, y):
         pred = self.predict(X)
         loss = self.calc_loss(y, pred)
-        loss += self.calc_reg_loss()
         dpred = self.calc_dpred(y, pred)
         grads = self.calc_grad(dpred)
         for i in range(len(self.mods)):
