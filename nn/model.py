@@ -117,7 +117,6 @@ class LinearModel(object):
                     W_mod[i[0]] = k(i[1], ep)
                     pred = self.predict(X, **{W_key: W_mod})
                     loss = self.calc_loss(y, pred, **{W_key: W_mod})
-                    #loss += self.calc_reg_loss(**{W_key: W_mod})
                     losses.append(loss)
                 grad = np.subtract(*losses) / (2 * ep) 
                 grads.append(grad)
@@ -258,6 +257,7 @@ class RNN(FeedFwd):
     def _calc_W_grad(self, dpreds):
         inds = reversed(range(len(dpreds)))
         grads = map(lambda ind: self._calc_ind_W_grad(dpreds[ind], ind), inds)
+        self.dX = list(reversed(self.dX))
         grads_sum = reduce(partial(merge_with, sum), grads)
         return valmap(lambda x: x / len(dpreds), grads_sum)
         
@@ -302,6 +302,7 @@ class StackedModels(object):
         for i in np.ndenumerate(X):
             losses = []
             for k in (op.add, op.sub):
+                #if hasattr(self, 'reset'): self.reset()
                 X_mod = np.array(X, copy=True)
                 X_mod[i[0]] = k(i[1], ep)
                 pred = self.predict(X_mod)
@@ -310,7 +311,7 @@ class StackedModels(object):
             grad = np.subtract(*losses) / (2 * ep) 
             grads.append(grad)
         grads = np.array(grads).reshape(*X.shape)
-        return {'mod0': grads}
+        return {0: grads}
 
     def step(self, X, y):
         pred = self.predict(X)
