@@ -1,8 +1,9 @@
 import math
+from operator import add
 
 import numpy as np
-from toolz import compose
-from toolz.dicttoolz import merge_with, valmap
+from toolz import first, second, accumulate, compose
+from toolz.dicttoolz import merge, merge_with, valmap
 
 
 class adagrad_lr(object):
@@ -18,6 +19,40 @@ class adagrad_lr(object):
         self.ss_grad = merge_with(sum, self.ss_grad, valmap(np.square, grad))
         f = compose(lambda x: np.minimum(x, self.max_adjusted_lr), self.f)
         return valmap(f, self.ss_grad)
+
+def get_minibatch(X, y, batch_size=None):
+    batch_size = len(X) if not batch_size else batch_size
+    while True:
+        inds = np.random.choice(np.arange(len(X)), size=batch_size, replace=False)
+        yield X[inds], y[inds]
+
+def get_seq_minibatch(X, y, batch_size, sequence_len):    
+    max_ind = len(X) - sequence_len - 1
+    while True:
+        inds = np.random.choice(np.arange(max_ind), size=batch_size, replace=False)
+        inds_inc = accumulate(add, [inds] + [1] * (sequence_len - 1))        
+        yield map(lambda inds: (X[inds], y[inds]), inds_inc)
+
+def is_sequence_type(Xy):
+    a = not isinstance(Xy[0], np.ndarray)
+    b = isinstance(Xy[0][0], np.ndarray)
+    return all([a, b])
+
+def split_Xy(Xy):
+    if not is_sequence_type(Xy):
+        X, y = Xy
+    else:
+        X = map(first, Xy)
+        y = map(second, Xy)
+    return X, y
+
+def accuracy(y, pred):
+    if all(map(lambda x: isinstance(x, list), (y, pred))):
+        accs = map(lambda x: accuracy(*x), zip(y, pred))
+        return sum(accs) / float(len(accs))
+    f = np.vectorize(lambda x: True if x == 0 else False)
+    correct = f(np.argmax(pred, axis=1) - y)
+    return sum(correct) / float(len(correct))
 
 def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
     
