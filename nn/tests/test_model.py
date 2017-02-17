@@ -78,7 +78,7 @@ class TestStackedLinearModel(TestFeedFwdModel):
 
 class TestRNN(unittest.TestCase):
 
-    def test_gradient_calc(self):
+    def setUp(self):
         text = "let's see if you can learn this sentance"
         enc = Encoder(text)
         X, y = [], []
@@ -86,16 +86,17 @@ class TestRNN(unittest.TestCase):
             if i:
                 X.append(enc.to_vect(text[i-1]))
                 y.append(enc.to_ind(text[i]))
-        X, y = map(np.array, (X, y))
+        self.X, self.y = map(np.array, (X, y))
+        self.in_size = self.X.shape[1]
+        self.out_size = self.X.shape[1]
 
-        in_size = X.shape[1]
-        out_size = X.shape[1]
+    def test_gradient_calc(self):
         hidden_size = 5
         sequence_len = 5
         batch_size = 5
-        h = RNN(in_size, hidden_size, out_size, relu, Softmax(), batch_size=batch_size)
+        h = RNN(self.in_size, hidden_size, self.out_size, relu, Softmax(), batch_size=batch_size)
 
-        data = get_seq_minibatch(X, y, batch_size, sequence_len,)
+        data = get_seq_minibatch(self.X, self.y, batch_size, sequence_len,)
         Xys = data.next()
         Xs = map(first, Xys)
         ys = map(second, Xys)
@@ -111,3 +112,8 @@ class TestRNN(unittest.TestCase):
         est_grad = h.est_grad(Xs, ys)
         ratios = check_grads(grad, est_grad).values()
         self.assertTrue(mean(ratios)  > .9)
+
+class TestStackedRNN(unittest.TestCase):
+
+    def test_gradient_calc(self):
+        self.assertTrue(False)
