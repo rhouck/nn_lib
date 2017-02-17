@@ -3,8 +3,10 @@ from functools import partial
 
 import numpy as np
 from toolz import accumulate
-from toolz.dicttoolz import merge_with, valmap
+from toolz.dicttoolz import merge_with, keymap, valmap
 
+
+prepend_key = lambda x, d: keymap(lambda k: '{0}_{1}'.format(x, k), d)
 
 class LinearModel(object):
     """general model building class
@@ -262,7 +264,11 @@ class StackedModels(object):
         for i in self.mods:
             if hasattr(i, 'reset'):
                 i.reset()
-        
+    
+    def _predict(self, X, layers=False):
+        calc_pred = lambda f: f(lambda x, m: m._predict(x), self.mods, X)
+        return calc_pred(accumulate) if layers else calc_pred(reduce)
+
     def predict(self, X, layers=False):
         calc_pred = lambda f: f(lambda x, m: m.predict(x), self.mods, X)
         return calc_pred(accumulate) if layers else calc_pred(reduce)
@@ -277,6 +283,7 @@ class StackedModels(object):
         return self.mods[-1].calc_dpred(y, pred)
 
     def calc_grad(self, dpred):
+
         grads = {}
         for i in reversed(range(len(self.mods))):
             grad = self.mods[i].calc_grad(dpred)
@@ -285,6 +292,7 @@ class StackedModels(object):
             grads[i] = grad
             dpred = self.mods[i].dX
         return grads
+        
     
     def est_grad(self, X, y):
         ep = 1e-5

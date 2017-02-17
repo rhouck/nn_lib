@@ -4,8 +4,8 @@ from sklearn import preprocessing
 
 class Encoder(object):
     def __init__(self, text):        
-        self.text = text.lower().replace(' ', '')
-        self.chars = list(set(text))
+        self.text = text.lower()
+        self.chars = list(set(self.text))
         self.le = preprocessing.LabelEncoder()
         self.le.fit(self.chars)
         

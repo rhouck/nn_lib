@@ -2,8 +2,10 @@ import math
 from operator import add
 
 import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
 from toolz import first, second, accumulate, compose
-from toolz.dicttoolz import merge, merge_with, valmap
+from toolz.dicttoolz import merge, merge_with, keymap, valmap, itemmap
 
 
 class adagrad_lr(object):
@@ -54,6 +56,11 @@ def accuracy(y, pred):
     correct = f(np.argmax(pred, axis=1) - y)
     return sum(correct) / float(len(correct))
 
+def combine(grad):
+    prepend_key = lambda x, d: keymap(lambda k: '{0}_{1}'.format(x, k), d)
+    grad = itemmap(lambda i: (i[0], prepend_key(i[0], i[1])), grad)
+    return merge(grad.values())
+
 def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
     
     def get_acc(y, pred):
@@ -78,17 +85,20 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 loss = mod.calc_loss(y, pred)
                 acc = get_acc(y, pred)
                 
+                dpred = mod.calc_dpred(y, pred)
+                grad = mod.calc_grad(dpred)
+                
+                f = lambda x: abs(x).mean()
+                try:
+                    grad_scale = valmap(f, grad)
+                except:
+                    grad = combine(grad)
+                    grad_scale = valmap(f, grad)
+
                 print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
-
-                # grad = mod.calc_grad(X, y, pred)
-                # grad = merge_with(sum, grad, mod.calc_dreg_loss())
-                # f = lambda x: abs(x).mean()
-                # grad_scale = valmap(f, grad)
-
-                # print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
-                # f = lambda x: '{0}: {1:.1e}'.format(*x)
-                # print('\t\t' + ' '.join(map(f, grad_scale.items())))
-                # stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
+                f = lambda x: '{0}: {1:.1e}'.format(*x)
+                print('\t\t' + ' '.join(map(f, grad_scale.items())))
+                stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
 
                 # if check and epoch <= (nepochs * .2):
                 #     est_grad = mod.est_grad(X, y)
@@ -99,3 +109,11 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
         print('stopping optimzation')
     
     return stats
+
+def plot_stats(stats):
+    df = pd.DataFrame(stats).set_index('epoch')
+    fig, ax = plt.subplots(ncols=3, figsize=[16,3])
+    perf = ('loss', 'acc')
+    for ind, col in enumerate(perf):
+        df[col].plot(ax=ax[ind], title=col)
+    df[[c for c in df.columns if c not in perf]].plot(ax=ax[2], title='gradients')
