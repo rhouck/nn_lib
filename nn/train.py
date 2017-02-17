@@ -63,11 +63,15 @@ def combine(grad):
 
 def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
     
-    def get_acc(y, pred):
+    def try_acc(y, pred):
         try:
             return round(accuracy(y, pred), 2)
         except:
             return np.nan
+
+    def chunks(l, n):
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
 
     stats = []
     try:
@@ -83,22 +87,26 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
                 X, y = split_Xy(Xy)
                 pred = mod.predict(X)
                 loss = mod.calc_loss(y, pred)
-                acc = get_acc(y, pred)
+                acc = try_acc(y, pred)
                 
                 dpred = mod.calc_dpred(y, pred)
                 grad = mod.calc_grad(dpred)
                 
                 f = lambda x: abs(x).mean()
                 try:
-                    grad_scale = valmap(f, grad)
+                    grad_mean = valmap(f, grad)
                 except:
                     grad = combine(grad)
-                    grad_scale = valmap(f, grad)
+                    grad_mean = valmap(f, grad)
 
+                stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_mean))
+                
                 print('epoch {0}:\tloss: {1:0.5f}\tacc: {2}'.format(epoch, loss, acc))
+                grad_mean_groups = chunks(grad_mean.items(), 5)
                 f = lambda x: '{0}: {1:.1e}'.format(*x)
-                print('\t\t' + ' '.join(map(f, grad_scale.items())))
-                stats.append(merge({'epoch': epoch, 'loss': loss, 'acc': acc}, grad_scale))
+                for grad_means in grad_mean_groups:
+                    print('\t\t' + ' '.join(map(f, grad_means)))
+                
 
                 # if check and epoch <= (nepochs * .2):
                 #     est_grad = mod.est_grad(X, y)
