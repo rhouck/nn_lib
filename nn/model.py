@@ -1,25 +1,10 @@
-import math
 import operator as op
 from functools import partial
 
 import numpy as np
-from toolz import compose, accumulate
+from toolz import accumulate
 from toolz.dicttoolz import merge_with, valmap
 
-
-class adagrad_lr(object):
-    def __init__(self, lr, max_adjusted_lr=10):
-        self.lr = lr    
-        self.max_adjusted_lr = max_adjusted_lr   
-        f = lambda x: self.lr / math.sqrt(x + 1e-8)
-        self.f = np.vectorize(f)
-        
-    def update(self, grad):
-        if not hasattr(self, 'ss_grad'):
-            self.ss_grad = valmap(np.zeros_like, grad)
-        self.ss_grad = merge_with(sum, self.ss_grad, valmap(np.square, grad))
-        f = compose(lambda x: np.minimum(x, self.max_adjusted_lr), self.f)
-        return valmap(f, self.ss_grad)
 
 class LinearModel(object):
     """general model building class
@@ -272,6 +257,11 @@ class StackedModels(object):
     """
     def __init__(self, mods):
         self.mods = mods
+
+    def reset(self,):
+        for i in self.mods:
+            if hasattr(i, 'reset'):
+                i.reset()
         
     def predict(self, X, layers=False):
         calc_pred = lambda f: f(lambda x, m: m.predict(x), self.mods, X)
