@@ -2,7 +2,6 @@ import math
 from operator import add
 
 import numpy as np
-import pandas as pd
 from matplotlib import pyplot as plt
 from toolz import first, second, accumulate, compose
 from toolz.dicttoolz import merge, merge_with, keymap, valmap, itemmap
@@ -119,9 +118,20 @@ def train(mod, data_gen, num_batch_per_epoch, nepochs=100, check=True):
     return stats
 
 def plot_stats(stats):
-    df = pd.DataFrame(stats).set_index('epoch')
     fig, ax = plt.subplots(ncols=3, figsize=[16,3])
-    perf = ('loss', 'acc')
-    for ind, col in enumerate(perf):
-        df[col].plot(ax=ax[ind], title=col)
-    df[[c for c in df.columns if c not in perf]].plot(ax=ax[2], title='gradients')
+
+    get_col = lambda stats, c: map(lambda x: x[c], stats)
+    X = get_col(stats, 'epoch')
+    perf_cols = ['loss', 'acc']
+    for ind, col in enumerate(perf_cols):
+        y = get_col(stats, col)
+        ax[ind].plot(X, y)
+        ax[ind].set_title(col)
+
+    grad_cols = [i for i in stats[0].keys() if i not in perf_cols + ['epoch']]
+
+    for ind, col in enumerate(grad_cols):
+        y = get_col(stats, col)
+        ax[2].plot(X, y, label=col)
+    ax[2].legend(loc="upper right")
+    ax[2].set_title('gradients')

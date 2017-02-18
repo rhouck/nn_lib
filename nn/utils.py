@@ -16,12 +16,13 @@ def check_grads(grad, est_grad, rel_error_thresh=1e-2):
     return checks
 
 def write_weights(fn, W):
-    if isinstance(W, list):
-        weights = [valmap(lambda x: x.tolist(), i) for i in W]
-    else:
-        weights = valmap(lambda x: x.tolist(), W)
+    def remove_numpy(W):
+        if isinstance(W, list):
+            return [remove_numpy(i) for i in W]
+        return valmap(lambda x: x.tolist(), W)
+    
     with open(fn, 'w') as f:
-        json.dump(weights, f)
+        json.dump(remove_numpy(W), f)
         
 def load_weights(fn):
     with open(fn, 'r') as f:
