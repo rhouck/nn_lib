@@ -129,9 +129,9 @@ def data_gen(enc, sequence_len, batch_size):
     inds = range(len(enc.text)-sequence_len-1)
     fs = compose(enc.ind_to_target_vect, lambda x: enc.lookup[x.text])   
     while True:
-        inds = np.random.choice(inds, size=batch_size, replace=False)
+        sel_inds = np.random.choice(inds, size=batch_size, replace=False)
         Xs, ys = [], []
-        for i in inds:
+        for i in sel_inds:
             row = enc.text[i:i+sequence_len]
             X = map(lambda x: x.vector, row)
             Xs.append(X)           
