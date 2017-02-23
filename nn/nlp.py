@@ -124,3 +124,16 @@ def gen_string(enc, mod, sequence_len, text, n):
         y, vect, Xs = fs(Xs)
         ys.append(y)
     return text + ' ' + ' '.join(ys)
+
+def data_gen(enc, sequence_len, batch_size):  
+    inds = range(len(enc.text)-sequence_len-1)
+    fs = compose(enc.ind_to_target_vect, lambda x: enc.lookup[x.text])   
+    while True:
+        inds = np.random.choice(inds, size=batch_size, replace=False)
+        Xs, ys = [], []
+        for i in inds:
+            row = enc.text[i:i+sequence_len]
+            X = map(lambda x: x.vector, row)
+            Xs.append(X)           
+            ys.append(fs(enc.text[i+1]))
+        yield map(np.array, (Xs, ys))
